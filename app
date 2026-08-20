@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Polyrhythm Siteswap Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for dark theme */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        
+        body {
+            overscroll-behavior-y: none;
+            height: 100dvh; 
+            width: 100vw;
+        }
+        @supports not (height: 100dvh) {
+            body { height: 100vh; }
+        }
+        .sidebar-transition {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 overflow-hidden font-sans selection:bg-blue-500/30 relative flex">
+
+    <!-- Floating Toggle Button -->
+    <button id="toggleMenuBtn" class="fixed top-4 left-4 z-10 bg-gray-900/90 backdrop-blur-md border border-gray-700 p-3 rounded-xl shadow-2xl flex items-center gap-3 hover:bg-gray-800 transition-colors">
+        <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        <span class="text-sm font-bold text-gray-200 hidden md:inline">Settings & Outputs</span>
+    </button>
+
+    <!-- Error Toast Notification -->
+    <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-red-600/95 backdrop-blur-sm text-white px-6 py-3 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.5)] z-50 font-bold tracking-wide transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] flex items-center gap-2 border border-red-400/50 text-sm whitespace-nowrap">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        <span id="toastMsg">Error</span>
+    </div>
+
+    <!-- Canvas Area -->
+    <div class="absolute inset-0 z-0 overflow-y-auto overflow-x-hidden flex justify-center pb-32" id="canvasContainer">
+        <canvas id="gridCanvas" class="block w-full cursor-crosshair"></canvas>
+    </div>
+
+    <!-- Floating Calculate Button -->
+    <button id="btnCalculatePopup" class="fixed bottom-12 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-gray-950 font-extrabold py-3.5 px-8 rounded-full shadow-[0_0_30px_rgba(34,197,94,0.3)] transition-all duration-500 z-10 translate-y-32 opacity-0 pointer-events-none flex items-center gap-3 cursor-pointer">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        Calculate Siteswap
+    </button>
+
+    <!-- Floating Sidebar / Controls -->
+    <div id="sidebar" class="sidebar-transition absolute top-0 left-0 h-[100dvh] w-full md:w-[420px] bg-gray-900/95 backdrop-blur-xl border-r border-gray-800 flex flex-col shrink-0 z-20 shadow-2xl overflow-y-auto transform -translate-x-full">
+        
+        <div class="sticky top-0 bg-gray-900/95 backdrop-blur-xl z-30 p-4 md:p-6 border-b border-gray-800 flex justify-between items-start">
+            <div>
+                <h1 class="text-2xl font-extrabold text-blue-400 tracking-tight">Siteswap Generator</h1>
+                <p class="text-xs text-gray-400 mt-1">Generate sync, naive, and adjusted siteswaps.</p>
+            </div>
+            <button id="closeSidebarBtn" class="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-gray-400 hover:text-white">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <div class="p-4 md:p-6 flex flex-col gap-5">
+            <div class="space-y-4 bg-gray-800/40 p-4 rounded-xl border border-gray-700/50">
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Ratio (a:b)</label>
+                        <input type="text" id="inputRatio" value="4:3" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                    </div>
+                    <div class="w-24">
+                        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Balls</label>
+                        <input type="number" id="inputBalls" value="5" min="1" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 pt-1">
+                    <input type="checkbox" id="inputAlternate" class="w-4 h-4 rounded border-gray-600 bg-gray-950 text-blue-500 focus:ring-blue-500 cursor-pointer">
+                    <label for="inputAlternate" class="text-sm font-medium text-gray-300 cursor-pointer">Alternate hands 2nd cycle<br><span class="text-xs text-gray-500 font-normal">(Visually swaps grid, appends * to Sync)</span></label>
+                </div>
+
+                <div class="flex gap-3 pt-2 border-t border-gray-700/50">
+                    <button id="btnGenerate" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 px-4 rounded-lg shadow-lg transition-all active:scale-95">
+                        Apply Settings
+                    </button>
+                    <button id="btnClear" class="bg-gray-700 hover:bg-gray-600 text-red-300 font-medium py-2.5 px-4 rounded-lg transition-all active:scale-95">
+                        Clear Arrows
+                    </button>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <h2 class="text-sm font-bold text-gray-300 uppercase tracking-wider border-b border-gray-800 pb-2">Calculated Outputs</h2>
+                
+                <div id="statusBox" class="p-3 rounded-lg border bg-yellow-900/20 border-yellow-700/50 text-yellow-300 text-sm font-medium">
+                    Status: Incomplete pattern. Connect all dots in the base cycle.
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Sync Siteswap</label>
+                    <textarea id="outSync" readonly rows="2" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-blue-300 font-mono text-sm resize-none focus:outline-none"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Naive Polyrhythm Siteswap</label>
+                    <textarea id="outNaive" readonly rows="2" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-emerald-300 font-mono text-sm resize-none focus:outline-none"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Dwell-Adjusted Siteswap</label>
+                    <textarea id="outAdjusted" readonly rows="3" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-purple-300 font-mono text-sm resize-none focus:outline-none"></textarea>
+                </div>
+            </div>
+
+            <!-- Juggling Animation Container -->
+            <div id="animContainer" class="hidden mt-2 flex-col items-center border-t border-gray-800 pt-6">
+                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 w-full text-left">Juggling Preview (50% Speed)</h2>
+                
+                <!-- Zoom Control -->
+                <div class="w-full max-w-[300px] flex items-center gap-3 mb-3">
+                    <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
+                    <input type="range" id="animZoomSlider" min="0.15" max="1.0" step="0.05" value="0.55" class="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-500 outline-none">
+                    <span id="animZoomDisplay" class="text-xs text-gray-400 font-mono w-10 text-right">0.55x</span>
+                </div>
+
+                <!-- Canvas is now solid black for higher contrast with the white balls -->
+                <canvas id="animCanvas" width="300" height="280" class="bg-black rounded-xl border border-gray-800 w-[300px] h-[280px] block"></canvas>
+            </div>
+            
+            <div class="h-10"></div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const inputRatio = document.getElementById('inputRatio');
+        const inputBalls = document.getElementById('inputBalls');
+        const inputAlternate = document.getElementById('inputAlternate');
+        const btnGenerate = document.getElementById('btnGenerate');
+        const btnClear = document.getElementById('btnClear');
+        const statusBox = document.getElementById('statusBox');
+        const outSync = document.getElementById('outSync');
+        const outNaive = document.getElementById('outNaive');
+        const outAdjusted = document.getElementById('outAdjusted');
+        const canvas = document.getElementById('gridCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const sidebar = document.getElementById('sidebar');
+        const toggleMenuBtn = document.getElementById('toggleMenuBtn');
+        const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+        const btnCalculatePopup = document.getElementById('btnCalculatePopup');
+        
+        // Animation Elements
+        const animContainer = document.getElementById('animContainer');
+        const animCanvas = document.getElementById('animCanvas');
+        const animCtx = animCanvas.getContext('2d');
+        const animZoomSlider = document.getElementById('animZoomSlider');
+        const animZoomDisplay = document.getElementById('animZoomDisplay');
+
+        // Logic State (Defaulted to 4:3, 5 Balls as requested)
+        let currentA = 4, currentB = 3;
+        let currentAlt = false;
+        let targetBalls = 5;
+        
+        let a = 4, b = 3;
+        let L = 12; 
+        let maxTime = 48; 
+        
+        let renderedDots = []; // Physical dots: {side, time, x, y, r}
+        let patternState = new Map(); // Maps logical base keys: `LogicalSide_BaseTime` -> { duration, crosses }
+
+        // Dynamic Rendering Variables
+        let UNIT_Y = 40;
+        const MARGIN_TOP = 80;
+        const BOTTOM_PADDING = 120; 
+        let DOT_RADIUS = 7;
+        let CENTER_OFFSET = 70;
+
+        let dragState = { active: false, source: null, curX: 0, curY: 0 };
+        let toastTimeout;
+        
+        // Animation Variables
+        let animReqId;
+        let simTime = 0;
+        let lastFrameTime = 0;
+        let simBalls = [];
+        let currentAnimScale = parseFloat(animZoomSlider.value);
+
+        function init() {
+            toggleMenuBtn.addEventListener('click', openSidebar);
+            closeSidebarBtn.addEventListener('click', closeSidebar);
+            btnCalculatePopup.addEventListener('click', openSidebar);
+
+            animZoomSlider.addEventListener('input', (e) => {
+                currentAnimScale = parseFloat(e.target.value);
+                animZoomDisplay.textContent = currentAnimScale.toFixed(2) + 'x';
+            });
+
+            // Redraws instantly when alternate is toggled to show the visual swap without losing work
+            inputAlternate.addEventListener('change', () => {
+                applySettings(false); 
+            });
+
+            btnGenerate.addEventListener('click', () => applySettings(true));
+            btnClear.addEventListener('click', () => {
+                patternState.clear();
+                updateOutputs();
+                draw();
+            });
+
+            bindInteractions();
+            window.addEventListener('resize', () => { setupCanvas(); draw(); });
+
+            applySettings(true);
+            setTimeout(closeSidebar, 10);
+        }
+
+        function openSidebar() {
+            sidebar.classList.remove('-translate-x-full');
+            sidebar.classList.add('translate-x-0');
+            btnCalculatePopup.classList.add('translate-y-32', 'opacity-0', 'pointer-events-none'); 
+        }
+
+        function closeSidebar() {
+            sidebar.classList.remove('translate-x-0');
+            sidebar.classList.add('-translate-x-full');
+            updateOutputs(); 
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('opacity-0', 'translate-y-[-20px]');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-[-20px]');
+            }, 3500);
+        }
+
+        function opposite(side) {
+            return side === 'L' ? 'R' : 'L';
+        }
+
+        // --- Core Abstract Graph Mappers ---
+        function getLogicalSide(physSide, physTime) {
+            const cycle = Math.floor(physTime / L);
+            const isSwapped = inputAlternate.checked && (cycle % 2 !== 0);
+            return isSwapped ? opposite(physSide) : physSide;
+        }
+
+        function getPhysSide(logicalSide, physTime) {
+            const cycle = Math.floor(physTime / L);
+            const isSwapped = inputAlternate.checked && (cycle % 2 !== 0);
+            return isSwapped ? opposite(logicalSide) : logicalSide;
+        }
+        
+        // Helper to determine the gap directly before a particular physical catch
+        function getPrecedingGap(side, time) {
+            if (time === 0) {
+                let isSwapped = currentAlt && (0 % 2 !== 0);
+                return side === 'L' ? (isSwapped ? a : b) : (isSwapped ? b : a);
+            }
+            const prevTime = time - 1;
+            const cycle = Math.floor(prevTime / L);
+            const isSwapped = currentAlt && (cycle % 2 !== 0);
+            const intL = isSwapped ? a : b;
+            const intR = isSwapped ? b : a;
+            return side === 'L' ? intL : intR;
+        }
+
+        function applySettings(forceClear = false) {
+            const ratioStr = inputRatio.value.trim();
+            const parts = ratioStr.split(':').map(n => parseInt(n, 10));
+            if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1]) || parts[0] <= 0 || parts[1] <= 0) {
+                showToast("Invalid ratio format. Use a:b (e.g., 2:3).");
+                return;
+            }
+            
+            const newA = parts[0];
+            const newB = parts[1];
+            const newAlt = inputAlternate.checked;
+            targetBalls = parseInt(inputBalls.value, 10) || 1;
+
+            if (newA !== currentA || newB !== currentB || forceClear) {
+                patternState.clear();
+            }
+
+            currentA = newA;
+            currentB = newB;
+            currentAlt = newAlt;
+
+            a = currentA;
+            b = currentB;
+            L = a * b;
+            
+            // Generate enough timeline to comfortably see interactions across swap cycles
+            maxTime = Math.max(3 * L, L + 20);
+
+            setupCanvas();
+            updateOutputs();
+            draw();
+            
+            if (window.innerWidth < 768 && forceClear) closeSidebar();
+        }
+
+        function setupCanvas() {
+            const screenH = window.innerHeight || document.documentElement.clientHeight;
+            const screenW = window.innerWidth || document.documentElement.clientWidth;
+            
+            // Adjust scaling so we can see into the 2nd (alternating) cycle comfortably
+            const cyclesToFit = currentAlt ? 2.1 : 1.3;
+            const idealUnitY = (screenH - MARGIN_TOP - BOTTOM_PADDING) / (L * cyclesToFit);
+            
+            UNIT_Y = Math.max(8, Math.min(50, idealUnitY));
+            DOT_RADIUS = Math.max(3.5, Math.min(8, UNIT_Y / 2.5));
+            CENTER_OFFSET = Math.min(120, Math.max(50, screenW * 0.15));
+
+            const logicalHeight = maxTime * UNIT_Y + MARGIN_TOP + BOTTOM_PADDING;
+            const dpr = window.devicePixelRatio || 1;
+            
+            canvas.width = screenW * dpr;
+            canvas.height = logicalHeight * dpr;
+            canvas.style.width = `${screenW}px`;
+            canvas.style.height = `${logicalHeight}px`;
+            ctx.scale(dpr, dpr);
+
+            renderedDots = [];
+            const centerX = screenW / 2;
+            const xLeft = centerX - CENTER_OFFSET;
+            const xRight = centerX + CENTER_OFFSET;
+
+            for (let t = 0; t <= maxTime; t++) {
+                let y = MARGIN_TOP + t * UNIT_Y;
+                let cycle = Math.floor(t / L);
+                let isSwapped = currentAlt && (cycle % 2 !== 0);
+                
+                // Physical L normally takes rhythmic beats of b. Physical R takes rhythmic beats of a.
+                // If alternate hands is on, physical sides swap their rhythmic speed on odd cycles!
+                let intL = isSwapped ? a : b;
+                let intR = isSwapped ? b : a;
+
+                if (t % intL === 0) renderedDots.push({ side: 'L', time: t, x: xLeft, y: y, r: DOT_RADIUS });
+                if (t % intR === 0) renderedDots.push({ side: 'R', time: t, x: xRight, y: y, r: DOT_RADIUS });
+            }
+        }
+
+        function bindInteractions() {
+            canvas.addEventListener('mousedown', (e) => startDrag(getEventPos(e).x, getEventPos(e).y));
+            window.addEventListener('mousemove', (e) => { if (dragState.active) doDrag(getEventPos(e).x, getEventPos(e).y); });
+            window.addEventListener('mouseup', (e) => { if (dragState.active) endDrag(getEventPos(e).x, getEventPos(e).y); });
+
+            canvas.addEventListener('touchstart', (e) => {
+                const pos = getTouchPos(e);
+                const dot = getDotAt(pos.x, pos.y);
+                if (dot) { e.preventDefault(); startDrag(pos.x, pos.y, dot); }
+            }, { passive: false });
+
+            window.addEventListener('touchmove', (e) => {
+                if (dragState.active) { e.preventDefault(); doDrag(getTouchPos(e).x, getTouchPos(e).y); }
+            }, { passive: false });
+
+            window.addEventListener('touchend', (e) => {
+                if (dragState.active) endDrag(getTouchPos(e, true).x, getTouchPos(e, true).y);
+            });
+        }
+
+        function getEventPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        function getTouchPos(e, isEnd = false) {
+            const rect = canvas.getBoundingClientRect();
+            const touch = isEnd ? e.changedTouches[0] : e.touches[0];
+            return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+        }
+
+        function getDotAt(x, y) {
+            for (let dot of renderedDots) {
+                const dx = dot.x - x;
+                const dy = dot.y - y;
+                if (Math.sqrt(dx*dx + dy*dy) < DOT_RADIUS + 30) return dot;
+            }
+            return null;
+        }
+
+        function startDrag(x, y, dot = null) {
+            dot = dot || getDotAt(x, y);
+            if (dot) {
+                dragState.active = true;
+                dragState.source = dot;
+                dragState.curX = x;
+                dragState.curY = y;
+                draw();
+            }
+        }
+
+        function doDrag(x, y) {
+            dragState.curX = x;
+            dragState.curY = y;
+            draw();
+        }
+
+        function getFirstNDots() {
+            // Protect physical dots in chronological timeline
+            return [...renderedDots].sort((a, b) => {
+                if (a.time !== b.time) return a.time - b.time;
+                return a.side.localeCompare(b.side);
+            }).slice(0, targetBalls);
+        }
+
+        function isInvalidInitialConnection(sourceDot, targetDot) {
+            if (!sourceDot || !targetDot) return false;
+            const firstN = getFirstNDots();
+            const srcInit = firstN.some(d => d.time === sourceDot.time && d.side === sourceDot.side);
+            const tgtInit = firstN.some(d => d.time === targetDot.time && d.side === targetDot.side);
+            return srcInit && tgtInit;
+        }
+
+        function endDrag(x, y) {
+            const hitDot = getDotAt(x, y);
+            const source = dragState.source;
+
+            if (hitDot) {
+                const logicalSrcSide = getLogicalSide(source.side, source.time);
+                const logicalBaseTime = source.time % L;
+                const activeKey = `${logicalSrcSide}_${logicalBaseTime}`;
+
+                if (hitDot === source) {
+                    // Clicked same dot -> delete abstract throw
+                    patternState.delete(activeKey);
+                } else if (hitDot.time > source.time) {
+                    
+                    const duration = hitDot.time - source.time;
+                    const crosses = source.side !== hitDot.side;
+
+                    // 1. Initial State Violation Check
+                    if (isInvalidInitialConnection(source, hitDot)) {
+                        showToast(`Cannot connect the first ${targetBalls} starting dots to each other!`);
+                        dragState.active = false;
+                        dragState.source = null;
+                        draw();
+                        return;
+                    }
+
+                    // 2. Collision Check: 
+                    const logicalTargetSide = getLogicalSide(hitDot.side, hitDot.time);
+                    const logicalTargetBaseTime = hitDot.time % L;
+                    let isCollision = false;
+
+                    for (let [k, v] of patternState.entries()) {
+                        if (k === activeKey) continue; 
+                        
+                        const extSrcSide = k.split('_')[0]; // logical base side
+                        const extSrcBaseTime = parseInt(k.split('_')[1]);
+                        
+                        // Project this abstract throw back onto Cycle 0 to figure out its target
+                        const physSrcSideInCycle0 = extSrcSide; // cycle 0 logical is physical
+                        const physTgtTime = extSrcBaseTime + v.duration;
+                        const physTgtSide = v.crosses ? opposite(physSrcSideInCycle0) : physSrcSideInCycle0;
+                        
+                        const extLogicalTargetSide = getLogicalSide(physTgtSide, physTgtTime);
+                        const extLogicalTargetBaseTime = physTgtTime % L;
+                        
+                        if (extLogicalTargetSide === logicalTargetSide && extLogicalTargetBaseTime === logicalTargetBaseTime) {
+                            isCollision = true; break;
+                        }
+                    }
+
+                    if (isCollision) {
+                        showToast("Collision: Two lines cannot land on the same rhythm dot!");
+                    } else {
+                        // Success! Store the perfectly invariant physical geometry mapped to base state.
+                        patternState.set(activeKey, { duration: duration, crosses: crosses });
+                    }
+                }
+            }
+
+            dragState.active = false;
+            dragState.source = null;
+            updateOutputs();
+            draw();
+        }
+
+        // --- Calculation & Output Generation ---
+        function toBase36(num) { return Number.isInteger(num) ? num.toString(36) : num.toFixed(2); }
+        function formatThrow(val, crosses) { return crosses ? toBase36(val) + 'x' : toBase36(val); }
+
+        function getModuloInCounts() {
+            let inCounts = {};
+            for (let [k, v] of patternState.entries()) {
+                const extSrcSide = k.split('_')[0]; 
+                const extSrcBaseTime = parseInt(k.split('_')[1]);
+                
+                const physTgtTime = extSrcBaseTime + v.duration;
+                const physTgtSide = v.crosses ? opposite(extSrcSide) : extSrcSide;
+                
+                const logicalTargetSide = getLogicalSide(physTgtSide, physTgtTime);
+                const logicalTargetBaseTime = physTgtTime % L;
+                
+                const targetKey = `${logicalTargetSide}_${logicalTargetBaseTime}`;
+                inCounts[targetKey] = (inCounts[targetKey] || 0) + 1;
+            }
+            return inCounts;
+        }
+
+        function updateOutputs() {
+            const baseDots = renderedDots.filter(d => d.time < L);
+            let inCounts = getModuloInCounts();
+
+            let isValid = true;
+            for (let dot of baseDots) {
+                // In base cycle, logical == physical side
+                const key = `${dot.side}_${dot.time}`;
+                if ((patternState.has(key) ? 1 : 0) !== 1 || (inCounts[key] || 0) !== 1) {
+                    isValid = false; break;
+                }
+            }
+
+            let totalDuration = 0;
+            for (let v of patternState.values()) totalDuration += v.duration;
+            const calcBalls = totalDuration / L;
+
+            if (isValid && calcBalls === targetBalls && sidebar.classList.contains('-translate-x-full')) {
+                btnCalculatePopup.classList.remove('translate-y-32', 'opacity-0', 'pointer-events-none');
+                btnCalculatePopup.classList.add('translate-y-0', 'opacity-100');
+            } else {
+                btnCalculatePopup.classList.add('translate-y-32', 'opacity-0', 'pointer-events-none');
+                btnCalculatePopup.classList.remove('translate-y-0', 'opacity-100');
+            }
+
+            if (!isValid) {
+                statusBox.className = "p-3 rounded-lg border bg-yellow-900/20 border-yellow-700/50 text-yellow-300 text-sm font-medium";
+                statusBox.innerHTML = "Status: Incomplete pattern. Connect all dots in the base cycle.";
+                outSync.value = outNaive.value = outAdjusted.value = "";
+                stopAnimation();
+                return;
+            }
+
+            if (calcBalls !== targetBalls) {
+                statusBox.className = "p-3 rounded-lg border bg-red-900/20 border-red-700/50 text-red-300 text-sm font-medium";
+                statusBox.innerHTML = `Status: Complete, but averages to <strong>${calcBalls} balls</strong> (expected ${targetBalls}). Keep drawing!`;
+                stopAnimation();
+            } else {
+                statusBox.className = "p-3 rounded-lg border bg-green-900/20 border-green-700/50 text-green-400 text-sm font-medium";
+                statusBox.innerHTML = `Status: Perfect! Valid pattern for <strong>${calcBalls} balls</strong>.`;
+                startAnimation();
+            }
+
+            // --- Gen 1: Sync Siteswap ---
+            let syncArr = [];
+            for (let t = 0; t < L; t++) {
+                const lThrow = patternState.get(`L_${t}`);
+                const rThrow = patternState.get(`R_${t}`);
+                
+                let lVal = lThrow ? formatThrow(lThrow.duration * 2, lThrow.crosses) : '0';
+                let rVal = rThrow ? formatThrow(rThrow.duration * 2, rThrow.crosses) : '0';
+                syncArr.push(`(${lVal}, ${rVal})`);
+            }
+            
+            let syncStr = syncArr.join(' ');
+            if (inputAlternate.checked) {
+                syncStr += '*'; // Appends clean asterisk
+            }
+            outSync.value = syncStr;
+
+            // --- Gen 2: Naive Polyrhythm Siteswap ---
+            const minAB = Math.min(a, b);
+            const getNaiveVal = (throwInfo) => formatThrow((throwInfo.duration * 2) / minAB, throwInfo.crosses);
+
+            const leftBaseDots = baseDots.filter(d => d.side === 'L').sort((d1, d2) => d1.time - d2.time);
+            const rightBaseDots = baseDots.filter(d => d.side === 'R').sort((d1, d2) => d1.time - d2.time);
+            
+            const lNaive = leftBaseDots.map(d => getNaiveVal(patternState.get(`L_${d.time}`)));
+            const rNaive = rightBaseDots.map(d => getNaiveVal(patternState.get(`R_${d.time}`)));
+            
+            // Per documentation: bracket format utilizes ({left},{right}) syntax to indicate they are embedded in same sync time frame
+            outNaive.value = `({${lNaive.join(', ')}},{${rNaive.join(', ')}})`;
+
+            // --- Gen 3: Dwell-Adjusted Siteswap ---
+            const reduction = minAB > 0 ? (2 * (Math.max(a, b) - minAB)) / minAB : 0;
+
+            const getAdjVal = (throwInfo, srcLogicalSide, srcBaseTime) => {
+                let val = (throwInfo.duration * 2) / minAB; // Start with naive value
+                
+                const physTgtTime = srcBaseTime + throwInfo.duration;
+                const physTgtSide = throwInfo.crosses ? opposite(srcLogicalSide) : srcLogicalSide;
+                
+                // If the gap immediately before the physical catch matches the slower rhythm, apply adjustment
+                const precedingGap = getPrecedingGap(physTgtSide, physTgtTime);
+                const isSlowGap = precedingGap === Math.max(a, b) && a !== b;
+
+                if (isSlowGap) {
+                    if (val >= 1) {
+                        val = Math.max(1, val - reduction); 
+                    }
+                }
+                
+                return formatThrow(val, throwInfo.crosses);
+            };
+
+            const lAdj = leftBaseDots.map(d => getAdjVal(patternState.get(`L_${d.time}`), 'L', d.time));
+            const rAdj = rightBaseDots.map(d => getAdjVal(patternState.get(`R_${d.time}`), 'R', d.time));
+            
+            outAdjusted.value = `({${lAdj.join(', ')}},{${rAdj.join(', ')}})`;
+        }
+        
+        // --- Continuous Stick Figure Juggling Animation ---
+        function startAnimation() {
+            if (animReqId) cancelAnimationFrame(animReqId);
+            
+            simBalls = getFirstNDots().map((d, i) => {
+                return {
+                    id: i,
+                    sourceSide: d.side,
+                    targetSide: d.side, // Spawns inside target hand
+                    nextThrowTime: d.time,
+                    flightStartT: -1,
+                    catchT: -1, // Setting catchT < 0 triggers the "In Hand (dwell)" logic immediately
+                    color: '#ffffff' // All balls requested to be white
+                };
+            });
+
+            simTime = 0;
+            lastFrameTime = performance.now();
+            animContainer.classList.remove('hidden');
+            animReqId = requestAnimationFrame(animLoop);
+        }
+
+        function stopAnimation() {
+            if (animReqId) {
+                cancelAnimationFrame(animReqId);
+                animReqId = null;
+            }
+            animContainer.classList.add('hidden');
+        }
+
+        function animLoop(now) {
+            const dt = now - lastFrameTime;
+            lastFrameTime = now;
+            
+            // Simulation timescale: scale by min(a,b) so 4:3 and 8:6 animate at the same visual speed.
+            // A "beat" in siteswap notation is typically ~300ms in real juggling. 
+            // We want 50% speed, so a standard logical beat should take ~600ms.
+            const BEAT_MS_AT_HALF_SPEED = 600;
+            const TIME_SCALE = BEAT_MS_AT_HALF_SPEED / Math.min(a, b); 
+            
+            simTime += dt / TIME_SCALE;
+            
+            updateAndDrawStickFigure();
+            
+            if (animReqId) {
+                animReqId = requestAnimationFrame(animLoop);
+            }
+        }
+
+        function updateAndDrawStickFigure() {
+            const w = animCanvas.width;
+            const h = animCanvas.height;
+            animCtx.clearRect(0, 0, w, h);
+
+            const cx = w / 2;
+            const cy = h - 15; // Juggler Base y (Feet)
+            
+            // Push zoom matrix anchoring to the Juggler's feet
+            animCtx.save();
+            animCtx.translate(cx, cy);
+            animCtx.scale(currentAnimScale, currentAnimScale);
+            animCtx.translate(-cx, -cy);
+
+            // Natural resting hand base positions
+            const baseHandL = { x: cx - 55, y: cy - 120 };
+            const baseHandR = { x: cx + 55, y: cy - 120 };
+
+            let handL = { ...baseHandL };
+            let handR = { ...baseHandR };
+            
+            // Dynamic scoop dimensions
+            const scoopWidth = 25;
+            const scoopDepth = 22;
+
+            // Determine which balls are currently being held
+            let ballsInL = simBalls.filter(b => b.targetSide === 'L' && simTime >= b.catchT && simTime < b.nextThrowTime).sort((A,B) => A.id - B.id);
+            let ballsInR = simBalls.filter(b => b.targetSide === 'R' && simTime >= b.catchT && simTime < b.nextThrowTime).sort((A,B) => A.id - B.id);
+
+            // Apply true semi-circular "scooping" motion if a hand is holding at least one ball (Dwell phase)
+            // Catch on the outside -> drop down/center -> throw on the inside.
+            if (ballsInL.length > 0) {
+                let p = (simTime - ballsInL[0].catchT) / (ballsInL[0].nextThrowTime - ballsInL[0].catchT);
+                p = Math.max(0, Math.min(1, p)); // 0 = Catch, 1 = Throw
+                
+                // Using (p - 0.5) * PI: maps p=0 to -PI/2 (outside), p=0.5 to 0 (bottom), p=1 to PI/2 (inside)
+                handL.x = baseHandL.x + scoopWidth * Math.sin((p - 0.5) * Math.PI);
+                handL.y = baseHandL.y + scoopDepth * Math.cos((p - 0.5) * Math.PI);
+            }
+            if (ballsInR.length > 0) {
+                let p = (simTime - ballsInR[0].catchT) / (ballsInR[0].nextThrowTime - ballsInR[0].catchT);
+                p = Math.max(0, Math.min(1, p));
+                
+                handR.x = baseHandR.x - scoopWidth * Math.sin((p - 0.5) * Math.PI); // inverted for Right side
+                handR.y = baseHandR.y + scoopDepth * Math.cos((p - 0.5) * Math.PI);
+            }
+
+            // Draw Juggler Body (Stick Figure)
+            animCtx.strokeStyle = '#4b5563'; // Tailwind Gray-600
+            animCtx.lineWidth = 6 / currentAnimScale; // Keep body lines thick even when zoomed out
+            animCtx.lineCap = 'round';
+            animCtx.lineJoin = 'round';
+
+            animCtx.beginPath();
+            animCtx.arc(cx, cy - 200, 18, 0, Math.PI * 2); // Head
+            animCtx.stroke();
+            
+            animCtx.beginPath();
+            animCtx.moveTo(cx, cy - 182);
+            animCtx.lineTo(cx, cy - 90); // Spine
+            
+            animCtx.moveTo(cx, cy - 90);
+            animCtx.lineTo(cx - 30, cy); // Left leg
+            animCtx.moveTo(cx, cy - 90);
+            animCtx.lineTo(cx + 30, cy); // Right leg
+            
+            // Arms (Connect shoulders -> elbows -> hands)
+            animCtx.moveTo(cx, cy - 160);
+            animCtx.lineTo(cx - 35, cy - 130);
+            animCtx.lineTo(handL.x, handL.y);
+
+            animCtx.moveTo(cx, cy - 160);
+            animCtx.lineTo(cx + 35, cy - 130);
+            animCtx.lineTo(handR.x, handR.y);
+            animCtx.stroke();
+
+            // Setup Flight Anchor Points mapping exactly to the hand's scoop entry/exit
+            const throwPosL = { x: baseHandL.x + scoopWidth, y: baseHandL.y };
+            const throwPosR = { x: baseHandR.x - scoopWidth, y: baseHandR.y };
+            const catchPosL = { x: baseHandL.x - scoopWidth, y: baseHandL.y };
+            const catchPosR = { x: baseHandR.x + scoopWidth, y: baseHandR.y };
+
+            // Process and Draw Balls
+            simBalls.forEach(ball => {
+                
+                // State machine to process physical throws continuously 
+                while (simTime >= ball.nextThrowTime) {
+                    const logicalSide = getLogicalSide(ball.targetSide, ball.nextThrowTime); 
+                    const baseTime = ball.nextThrowTime % L;
+                    const key = logicalSide + '_' + baseTime;
+                    const throwInfo = patternState.get(key);
+
+                    ball.sourceSide = ball.targetSide; 
+
+                    if (throwInfo) {
+                        ball.flightStartT = ball.nextThrowTime;
+                        ball.duration = throwInfo.duration;
+                        const physTgtSide = throwInfo.crosses ? opposite(ball.sourceSide) : ball.sourceSide;
+                        const physTgtTime = ball.flightStartT + ball.duration;
+                        
+                        ball.targetSide = physTgtSide;
+                        
+                        // Rigorous separation of Dwell vs Air time
+                        let minAB = Math.min(a, b);
+                        let gap = getPrecedingGap(physTgtSide, physTgtTime);
+                        let visualDwell = minAB * 0.6; // Standard visual carry time
+                        let extraDwell = gap > minAB ? gap - minAB : 0; // The theoretical slower hand hold adjustment
+
+                        ball.catchT = physTgtTime - (visualDwell + extraDwell);
+                        ball.nextThrowTime = physTgtTime;
+                        
+                        // Enforce strictly positive flight time physically to avoid overlap glitches
+                        if (ball.catchT <= ball.flightStartT) ball.catchT = ball.flightStartT + 0.1; 
+                    } else {
+                        // Failsafe for unexpected break
+                        ball.flightStartT = ball.nextThrowTime;
+                        ball.nextThrowTime += 1;
+                        ball.catchT = ball.nextThrowTime - 0.5;
+                    }
+                }
+
+                let bx, by;
+
+                if (simTime < ball.catchT) {
+                    // --- Ball is in Flight (True Kinematics) ---
+                    let p = (simTime - ball.flightStartT) / (ball.catchT - ball.flightStartT);
+                    p = Math.max(0, Math.min(1, p));
+                    
+                    // Flight path connects exactly the INNER throw point to the OUTER catch point.
+                    let startPos = ball.sourceSide === 'L' ? throwPosL : throwPosR; 
+                    let endPos = ball.targetSide === 'L' ? catchPosL : catchPosR;
+                    
+                    // Linearly travel horizontally between anchor points (creates outward arc natively!)
+                    bx = startPos.x + (endPos.x - startPos.x) * p;
+                    
+                    // TRUE PHYSICS: Height is proportional to the square of flight time (h = 1/8 * g * t^2).
+                    let rawFlightTime = Math.max(0, ball.catchT - ball.flightStartT);
+                    let normFt = rawFlightTime / Math.min(a, b); 
+                    
+                    // Extremely aggressive gravity scale to firmly enforce realistic spacing.
+                    let gravityScale = 22; 
+                    let peakHeight = gravityScale * (normFt * normFt);
+                    
+                    // True parabolic arc mapping 0 -> 1 -> 0 based on flight progression (4 * p * (1-p))
+                    let parabola = 4 * p * (1 - p);
+                    
+                    by = startPos.y + (endPos.y - startPos.y) * p - (peakHeight * parabola);
+                } else {
+                    // --- Ball is in Dwell (held in hand) ---
+                    let currentHand = ball.targetSide === 'L' ? handL : handR;
+                    let list = ball.targetSide === 'L' ? ballsInL : ballsInR;
+                    let index = list.indexOf(ball);
+                    
+                    // Visually fan out balls so they don't hide each other if a hand holds multiple (e.g. at start)
+                    let offsetX = 0;
+                    let offsetY = 0;
+                    if (list.length > 1) {
+                        offsetX = (index - (list.length - 1) / 2) * 12; // spread horizontally
+                        offsetY = Math.abs(index - (list.length - 1) / 2) * 6; // stack vertically like a triangle
+                    }
+
+                    bx = currentHand.x + offsetX;
+                    by = currentHand.y - offsetY; // Rest on top of the hand
+                }
+
+                // Render Ball
+                animCtx.beginPath();
+                // Balls stay same visual size regardless of zoom out level for visibility
+                let drawRadius = 9 / Math.sqrt(currentAnimScale); 
+                animCtx.arc(bx, by, drawRadius, 0, Math.PI * 2);
+                animCtx.fillStyle = ball.color; // Set to white
+                animCtx.fill();
+                animCtx.strokeStyle = '#d1d5db'; // Light gray stroke for edge definition against white
+                animCtx.lineWidth = 2 / currentAnimScale;
+                animCtx.stroke();
+            });
+
+            animCtx.restore();
+        }
+
+        // --- Visual Rendering Engine ---
+        function draw() {
+            const w = canvas.width / (window.devicePixelRatio || 1);
+            const h = canvas.height / (window.devicePixelRatio || 1);
+            ctx.clearRect(0, 0, w, h);
+
+            const centerX = w / 2;
+            const bgWidth = CENTER_OFFSET * 2 + 80;
+            
+            ctx.beginPath();
+            ctx.strokeStyle = '#374151'; 
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(centerX, MARGIN_TOP - 20);
+            ctx.lineTo(centerX, h);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.fillStyle = '#1e3a8a22'; 
+            ctx.fillRect(centerX - bgWidth/2, MARGIN_TOP - 20, bgWidth, L * UNIT_Y);
+            ctx.fillStyle = '#60a5fa';
+            ctx.font = '10px sans-serif';
+            ctx.fillText("BASE CYCLE", centerX + bgWidth/2 + 10, MARGIN_TOP + (L * UNIT_Y)/2);
+            ctx.strokeStyle = '#2563eb44';
+            ctx.strokeRect(centerX - bgWidth/2, MARGIN_TOP - 20, bgWidth, L * UNIT_Y);
+
+            // Visually draw the SWAP line if Alternate is active
+            if (currentAlt) {
+                const swapY = MARGIN_TOP + L * UNIT_Y;
+                ctx.beginPath();
+                ctx.strokeStyle = '#ef444466'; 
+                ctx.setLineDash([4, 4]);
+                ctx.moveTo(centerX - bgWidth/2, swapY);
+                ctx.lineTo(centerX + bgWidth/2, swapY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.fillStyle = '#ef4444';
+                ctx.font = '9px sans-serif';
+                ctx.fillText("HANDS SWAP RHYTHMS", centerX + bgWidth/2 + 10, swapY + 3);
+            }
+
+            // Draw established connections flawlessly onto the physical grid
+            ctx.lineWidth = 2;
+            for (let dot of renderedDots) {
+                const logicalSrcSide = getLogicalSide(dot.side, dot.time);
+                const baseTime = dot.time % L;
+                const key = `${logicalSrcSide}_${baseTime}`;
+                
+                if (patternState.has(key)) {
+                    const throwInfo = patternState.get(key);
+                    
+                    const targetPhysTime = dot.time + throwInfo.duration;
+                    const targetPhysSide = throwInfo.crosses ? opposite(dot.side) : dot.side;
+                    
+                    const targetDot = renderedDots.find(d => d.side === targetPhysSide && d.time === targetPhysTime);
+                    if (targetDot) {
+                        drawConnection(dot.x, dot.y, targetDot.x, targetDot.y, dot.side, targetDot.side, '#60a5fa');
+                    } else if (targetPhysTime <= maxTime + L) {
+                        const mockTargetY = MARGIN_TOP + targetPhysTime * UNIT_Y;
+                        const mockTargetX = targetPhysSide === 'L' ? centerX - CENTER_OFFSET : centerX + CENTER_OFFSET;
+                        drawConnection(dot.x, dot.y, mockTargetX, mockTargetY, dot.side, targetPhysSide, '#3b82f655');
+                    }
+                }
+            }
+
+            // Render live drag preview
+            if (dragState.active && dragState.source) {
+                const previewSide = dragState.curX < centerX ? 'L' : 'R';
+                const hoverDot = getDotAt(dragState.curX, dragState.curY);
+                let isIllegal = false;
+                
+                if (hoverDot && hoverDot.time > dragState.source.time) {
+                    if (isInvalidInitialConnection(dragState.source, hoverDot)) {
+                        isIllegal = true;
+                    } else {
+                        // Live Collision Check
+                        const logicalSrcSide = getLogicalSide(dragState.source.side, dragState.source.time);
+                        const logicalBaseTime = dragState.source.time % L;
+                        const activeKey = `${logicalSrcSide}_${logicalBaseTime}`;
+
+                        const physTgtTime = hoverDot.time;
+                        const logicalTargetSide = getLogicalSide(hoverDot.side, physTgtTime);
+                        const logicalTargetBaseTime = physTgtTime % L;
+
+                        for (let [k, v] of patternState.entries()) {
+                            if (k === activeKey) continue;
+                            const extSrcSide = k.split('_')[0];
+                            const extSrcBaseTime = parseInt(k.split('_')[1]);
+                            
+                            const extPhysTgtTime = extSrcBaseTime + v.duration;
+                            const extPhysTgtSide = v.crosses ? opposite(extSrcSide) : extSrcSide;
+                            const extLogicalTargetSide = getLogicalSide(extPhysTgtSide, extPhysTgtTime);
+                            const extLogicalTargetBaseTime = extPhysTgtTime % L;
+                            
+                            if (extLogicalTargetSide === logicalTargetSide && extLogicalTargetBaseTime === logicalTargetBaseTime) {
+                                isIllegal = true; break;
+                            }
+                        }
+                    }
+                } else if (hoverDot) {
+                    isIllegal = true; // Backward throw
+                }
+                
+                drawConnection(dragState.source.x, dragState.source.y, dragState.curX, dragState.curY, dragState.source.side, previewSide, isIllegal ? '#ef4444' : '#93c5fd');
+            }
+
+            let inCounts = getModuloInCounts();
+
+            for (let dot of renderedDots) {
+                const logicalSide = getLogicalSide(dot.side, dot.time);
+                const baseTime = dot.time % L;
+                const key = `${logicalSide}_${baseTime}`;
+                
+                const outCount = patternState.has(key) ? 1 : 0;
+                const inCount = inCounts[key] || 0;
+
+                let color = '#ef4444'; // Red
+                if (outCount === 1 && inCount === 1) color = '#22c55e'; // Green
+                else if (outCount > 1 || inCount > 1) color = '#a855f7'; // Purple (Clash)
+                else if (outCount === 1 || inCount === 1) color = '#eab308'; // Yellow
+
+                if (dragState.active && dragState.source === dot) {
+                    ctx.beginPath(); ctx.arc(dot.x, dot.y, dot.r + 4, 0, Math.PI * 2);
+                    ctx.fillStyle = '#bfdbfe'; ctx.fill();
+                }
+
+                ctx.beginPath(); ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
+                ctx.fillStyle = color; ctx.fill();
+                ctx.strokeStyle = '#111827'; ctx.lineWidth = 2; ctx.stroke();
+
+                ctx.fillStyle = '#6b7280';
+                const fontSize = Math.max(9, Math.min(12, UNIT_Y / 2));
+                ctx.font = `${fontSize}px monospace`;
+                
+                if (dot.side === 'L') ctx.fillText(`t=${dot.time}`, dot.x - 30 - fontSize, dot.y + (fontSize/3));
+                else ctx.fillText(`t=${dot.time}`, dot.x + 15, dot.y + (fontSize/3));
+            }
+        }
+
+        function drawConnection(x1, y1, x2, y2, side1, side2, color) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            let arrowAngle = 0, endX = x2, endY = y2;
+
+            if (side1 === side2) {
+                const curveOut = side1 === 'L' ? -(CENTER_OFFSET + 20) : (CENTER_OFFSET + 20);
+                const cx = x1 + curveOut;
+                const cy = (y1 + y2) / 2;
+                
+                ctx.moveTo(x1, y1);
+                ctx.quadraticCurveTo(cx, cy, x2, y2);
+                ctx.stroke();
+
+                arrowAngle = Math.atan2(y2 - cy, x2 - cx);
+                endX = x2 - (DOT_RADIUS + 2) * Math.cos(arrowAngle);
+                endY = y2 - (DOT_RADIUS + 2) * Math.sin(arrowAngle);
+            } else {
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+
+                arrowAngle = Math.atan2(y2 - y1, x2 - x1);
+                endX = x2 - (DOT_RADIUS + 2) * Math.cos(arrowAngle);
+                endY = y2 - (DOT_RADIUS + 2) * Math.sin(arrowAngle);
+            }
+
+            ctx.save();
+            ctx.translate(endX, endY);
+            ctx.rotate(arrowAngle);
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-10, 4); ctx.lineTo(-10, -4); ctx.closePath();
+            ctx.fillStyle = color; ctx.fill();
+            ctx.restore();
+        }
+
+        init();
+    </script>
+</body>
+</html>
+
+
